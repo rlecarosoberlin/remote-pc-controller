@@ -36,7 +36,7 @@ public:
     NetworkTest() : server_socket(-1), client_socket(-1), is_server(false), port(8080) {}
 
     bool startServer() {
-        server_socket = socket(AF_INET, SOCK_STREAM, 0);
+        server_socket = socket(AF_INET, SOCK_DGRAM, 0);
         if (server_socket == -1) {
             std::cerr << "Failed to create server socket" << std::endl;
             return false;
@@ -82,7 +82,7 @@ public:
     }
 
     bool connectToServer(const std::string& ip) {
-        client_socket = socket(AF_INET, SOCK_STREAM, 0);
+        client_socket = socket(AF_INET, SOCK_DGRAM, 0);
         if (client_socket == -1) {
             std::cerr << "Failed to create client socket" << std::endl;
             return false;
