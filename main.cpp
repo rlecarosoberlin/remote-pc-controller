@@ -9,6 +9,21 @@
 #include <chrono>
 #include <termios.h>
 
+struct termios orig_termios;
+
+void disableRawMode() {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+void enableRawMode() {
+    tcgetattr(STDIN_FILENO, &orig_termios);
+    atexit(disableRawMode);
+
+    struct termios raw = orig_termios;
+    raw.c_lflag &= ~(ECHO | ICANON); // Turn off echo and canonical mode
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
 class NetworkTest {
 private:
     int server_socket;
@@ -195,21 +210,6 @@ public:
         cleanup();
     }
 };
-
-struct termios orig_termios;
-
-void disableRawMode() {
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
-}
-
-void enableRawMode() {
-    tcgetattr(STDIN_FILENO, &orig_termios);
-    atexit(disableRawMode);
-
-    struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON); // Turn off echo and canonical mode
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
