@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <thread>
 #include <chrono>
+#include <termios.h>
 
 class NetworkTest {
 private:
@@ -92,7 +93,7 @@ public:
     }
 
     void sendMessage(const std::string& message) {
-        int socket_to_use = is_server ? client_socket : client_socket;
+        int socket_to_use = client_socket;
         if (send(socket_to_use, message.c_str(), message.length(), 0) < 0) {
             std::cerr << "Failed to send message" << std::endl;
         } else {
@@ -126,6 +127,7 @@ public:
         std::cout << "\nServer is running. Type messages to send to client (type 'quit' to exit):" << std::endl;
         
         // Start receiving thread
+        // Create a thread using networkTest class as a lambda function
         std::thread receive_thread([this]() {
             while (true) {
                 std::string received = receiveMessage();
@@ -134,11 +136,16 @@ public:
         });
 
         // Send messages in main thread
-        std::string input;
-        while (std::getline(std::cin, input)) {
-            if (input == "quit") break;
-            sendMessage(input);
+        enableRawMode();
+        char c;
+        while (true) {
+            ssize_t n = read(STDIN_FILENO, &c, 1);
+            if (n == 1) {
+                if (c == 3) break; // Ctrl-C to quit
+                sendMessage(std::string(1, c));
+            }
         }
+        disableRawMode();
 
         receive_thread.join();
         cleanup();
@@ -160,11 +167,16 @@ public:
         });
 
         // Send messages in main thread
-        std::string input;
-        while (std::getline(std::cin, input)) {
-            if (input == "quit") break;
-            sendMessage(input);
+        enableRawMode();
+        char c;
+        while (true) {
+            ssize_t n = read(STDIN_FILENO, &c, 1);
+            if (n == 1) {
+                if (c == 3) break; // Ctrl-C to quit
+                sendMessage(std::string(1, c));
+            }
         }
+        disableRawMode();
 
         receive_thread.join();
         cleanup();
@@ -183,6 +195,21 @@ public:
         cleanup();
     }
 };
+
+struct termios orig_termios;
+
+void disableRawMode() {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+void enableRawMode() {
+    tcgetattr(STDIN_FILENO, &orig_termios);
+    atexit(disableRawMode);
+
+    struct termios raw = orig_termios;
+    raw.c_lflag &= ~(ECHO | ICANON); // Turn off echo and canonical mode
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
