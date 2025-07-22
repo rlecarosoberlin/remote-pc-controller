@@ -32,6 +32,13 @@ private:
     std::string server_ip;
     int port;
 
+    // For server:
+    struct sockaddr_in last_client_addr;
+    socklen_t last_client_addr_len;
+
+    // For client:
+    struct sockaddr_in server_addr;
+
 public:
     NetworkTest() : server_socket(-1), client_socket(-1), is_server(false), port(8080) {}
 
@@ -59,24 +66,19 @@ public:
             return false;
         }
 
-        if (listen(server_socket, 1) < 0) {
-            std::cerr << "Failed to listen on server socket" << std::endl;
-            return false;
-        }
-
         std::cout << "Server started on port " << port << std::endl;
         std::cout << "Waiting for client connection..." << std::endl;
 
-        struct sockaddr_in client_addr;
-        socklen_t client_addr_len = sizeof(client_addr);
-        client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_addr_len);
+        char buffer[1024];
+        last_client_addr_len = sizeof(last_client_addr);
+        int n = recvfrom(server_socket, buffer, sizeof(buffer), 0, (struct sockaddr*)&last_client_addr, &last_client_addr_len);
         
-        if (client_socket < 0) {
-            std::cerr << "Failed to accept client connection" << std::endl;
+        if (n < 0) {
+            std::cerr << "Failed to receive client connection" << std::endl;
             return false;
         }
 
-        std::cout << "Client connected from " << inet_ntoa(client_addr.sin_addr) << std::endl;
+        std::cout << "Client connected from " << inet_ntoa(last_client_addr.sin_addr) << std::endl;
         is_server = true;
         return true;
     }
@@ -88,17 +90,11 @@ public:
             return false;
         }
 
-        struct sockaddr_in server_addr;
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(port);
         
         if (inet_pton(AF_INET, ip.c_str(), &server_addr.sin_addr) <= 0) {
             std::cerr << "Invalid address" << std::endl;
-            return false;
-        }
-
-        if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-            std::cerr << "Failed to connect to server" << std::endl;
             return false;
         }
 
@@ -109,7 +105,7 @@ public:
 
     void sendMessage(const std::string& message) {
         int socket_to_use = client_socket;
-        if (send(socket_to_use, message.c_str(), message.length(), 0) < 0) {
+        if (sendto(socket_to_use, message.c_str(), message.length(), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
             std::cerr << "Failed to send message" << std::endl;
         } else {
             std::cout << "Sent: " << message << std::endl;
@@ -119,7 +115,9 @@ public:
     std::string receiveMessage() {
         char buffer[1024] = {0};
         int socket_to_use = is_server ? client_socket : client_socket;
-        int bytes_received = recv(socket_to_use, buffer, sizeof(buffer) - 1, 0);
+        struct sockaddr_in client_addr;
+        socklen_t len = sizeof(client_addr);
+        int bytes_received = recvfrom(socket_to_use, buffer, sizeof(buffer) - 1, 0, (struct sockaddr*)&client_addr, &len);
         
         if (bytes_received > 0) {
             std::string message(buffer);
